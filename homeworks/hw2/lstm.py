@@ -72,3 +72,17 @@ def train_lstm_model(train_iter, val_iter, test_iter, text, hidden_size, num_lay
     model.reset_contexts(test_iter.batch_size)
     test_perplexity = util.evaluate_perplexity(model, test_iter, True)
     print('Test perplexity: %s' % test_perplexity)
+
+def evaluate_lstm_model(train_iter, val_iter, test_iter, text, hidden_size, num_layers):
+    model = LSTMLanguageModel(text, hidden_size, num_layers, 0.).to(util.DEVICE)
+
+    model.load_state_dict(torch.load('best_lstm_model.pt'))
+    model.eval()
+
+    model.reset_contexts(val_iter.batch_size)
+    val_perplexity = util.evaluate_perplexity(model, val_iter, True)
+    print('Validation perplexity: %s' % val_perplexity)
+
+    model.reset_contexts(test_iter.batch_size)
+    test_perplexity = util.evaluate_perplexity(model, test_iter, True)
+    print('Test perplexity: %s' % test_perplexity)

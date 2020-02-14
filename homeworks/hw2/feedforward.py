@@ -1,6 +1,5 @@
 import torch
 import util
-import numpy as np
 from torch import nn
 
 

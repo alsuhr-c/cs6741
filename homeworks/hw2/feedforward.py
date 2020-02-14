@@ -12,19 +12,22 @@ class FeedforwardLanguageModel(torch.nn.Module):
         self._window_size = window_size
 
         # Glove embeddings
-        self._embeddings = self._text.vocab.vectors.to(util.DEVICE)
+        self._embeddings = self._text.vocab.vectors
 
         self._update_embeddings = nn.Embedding(*self._embeddings.size())
         self._update_embeddings.weight.data.copy_(self._embeddings)
 
         # First layer will concatenate the embeddings from the past window_size things
-        self._combination_layer = nn.Linear(self._embeddings.size(1) * 2 * window_size, hidden_size)
+        self._combination_layer = nn.Linear(self._embeddings.size(1) * window_size, hidden_size)
+        self._dropout_layer = nn.Dropout(0.5)
 
         # Output layer on top of combo layer
-        self._output_layer = nn.Linear(hidden_size, len(self._text.vocab))
+        self._output_layer = nn.Linear(hidden_size, hidden_size)
 
         # Residual connection
-        self._residual_layer = nn.Linear(self._embeddings.size(1) * 2 * window_size, len(self._text.vocab))
+        self._residual_layer = nn.Linear(self._embeddings.size(1) * window_size, hidden_size)
+
+        self._last_layer = nn.Linear(hidden_size, len(self._text.vocab))
 
         # Keeps track of the last window_size tokens for each item in the batch.
         # Initially, all 0, indicating that the embedding should be zeroed out.
@@ -40,19 +43,17 @@ class FeedforwardLanguageModel(torch.nn.Module):
         for token_index in range(batch.text.size(0)):
             inputs = self._batch_contexts
 
-            # Embed words and flatten
-            update_embeddings = self._update_embeddings(inputs.to(util.DEVICE).long())
-
-            flattened_inputs = inputs.view(-1)
-            embeddings = torch.index_select(self._embeddings, 0, flattened_inputs.long()).view(
-                batch_size, self._window_size, -1)
-            embeddings = torch.cat((embeddings.to(util.DEVICE), update_embeddings), dim=2).view(batch_size, -1)
+            # Embed words
+            embeddings = self._dropout_layer(self._update_embeddings(inputs.to(util.DEVICE).long()).view(batch_size, -1))
 
             # Put through middle layer and tanh
-            hidden = torch.tanh(self._combination_layer(embeddings))
+            hidden = self._output_layer(torch.relu(self._combination_layer(embeddings)))
+            res_out = self._residual_layer(embeddings)
+
+            hidden = torch.relu(hidden + res_out)
 
             # Put through the output layer
-            logits.append(self._output_layer(hidden) + self._residual_layer(embeddings))
+            logits.append(self._last_layer(hidden))
 
             # Update the context by shifting contexts left and adding the most recent input
             self._batch_contexts[:, :-1] = self._batch_contexts[:, 1:]
@@ -66,7 +67,7 @@ def train_feedforward_language_model(train_iter, val_iter, test_iter, text, wind
 
     model.reset_contexts(train_iter.batch_size)
 
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
 
     util.train_model(model, train_iter, val_iter, optimizer, criterion)
@@ -76,3 +77,7 @@ def train_feedforward_language_model(train_iter, val_iter, test_iter, text, wind
     model.reset_contexts(val_iter.batch_size)
     val_perplexity = util.evaluate_perplexity(model, val_iter, True)
     print('Validation perplexity: %s' % val_perplexity)
+
+    model.reset_contexts(test_iter.batch_size)
+    test_perplexity = util.evaluate_perplexity(model, test_iter, True)
+    print('Test perplexity: %s' % test_perplexity)

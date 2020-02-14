@@ -4,6 +4,7 @@ import sys
 from torchtext.data.iterator import BPTTIterator
 from count_based import train_count_based_model
 from feedforward import train_feedforward_language_model
+from list import train_lstm_model
 from torchtext.vocab import Vectors
 
 TEXT = torchtext.data.Field()
@@ -36,3 +37,5 @@ if '--count_based_model' in sys.argv:
     train_count_based_model(train_iter, val_iter, test_iter, TEXT, 0.3, 0.7)
 elif '--feedforward_model' in sys.argv:
     train_feedforward_language_model(train_iter, val_iter, test_iter, TEXT, 3, 64)
+elif '--lstm_model' in sys.argv:
+    train_lstm_model(train_iter, val_iter, test_iter, TEXT)

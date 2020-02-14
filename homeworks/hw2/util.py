@@ -5,6 +5,11 @@ from tqdm import tqdm
 EOS = '<eos>'
 UNK = '<unk>'
 
+if torch.cuda.device_count() >= 1:
+    DEVICE: torch.device = torch.device('cuda')
+else:
+    DEVICE: torch.device = torch.device('cpu')
+
 
 def evaluate_perplexity(model, data_iter, logits=False):
     # Perplexity is
@@ -66,6 +71,7 @@ def train_model(model, train_iter, val_iter, optimizer, loss_fn):
                 pbar.update(1)
 
         model.eval()
+        train_ppl = evaluate_perplexity(model, train_iter, True)
         best = False
         val_ppl = evaluate_perplexity(model, val_iter, True)
         if val_ppl < min_ppl:
@@ -76,6 +82,6 @@ def train_model(model, train_iter, val_iter, optimizer, loss_fn):
             best = True
         countdown -= 1
         print('Epoch #%d; countdown = %d; val ppl = ' % (epoch_num, countdown) +
-              '{0:.2f}'.format(val_ppl) + ('*' if best else ''))
+              '{0:.2f}'.format(val_ppl) + '; train ppl = ' + '{0:.2f}'.format(train_ppl) + ('*' if best else ''))
         epoch_num += 1
         model.train()

@@ -9,7 +9,9 @@ from torchtext.vocab import Vectors
 TEXT = torchtext.data.Field()
 
 train, val, test = torchtext.datasets.LanguageModelingDataset.splits(
-    path='/home/alsuhr/Documents/cs6741/homeworks/hw2/ptb/', train='train.txt', validation='valid.txt', test='test.txt',
+#    path='/home/alsuhr/Documents/cs6741/homeworks/hw2/ptb/', 
+    path='/Users/alsuhr/Documents/Cornell/cs6741/ptb/',
+    train='train.txt', validation='valid.txt', test='test.txt',
     text_field=TEXT)
 
 if '--debug' in sys.argv:
@@ -27,10 +29,10 @@ print('Loaded %s testing examples' % len(test))
 print('Vocab size is %s' % len(TEXT.vocab))
 
 train_iter, val_iter, test_iter = BPTTIterator.splits((train, val, test), batch_size=10,
-                                                      device=torch.device('cuda'),
+#                                                      device=torch.device('cuda'),
                                                       bptt_len=32, repeat=False)
 
 if '--count_based_model' in sys.argv:
     train_count_based_model(train_iter, val_iter, test_iter, TEXT, 0.3, 0.7)
 elif '--feedforward_model' in sys.argv:
-    train_feedforward_language_model(train_iter, val_iter, test_iter, TEXT, 5, 1024)
+    train_feedforward_language_model(train_iter, val_iter, test_iter, TEXT, 3, 64)

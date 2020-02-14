@@ -6,9 +6,9 @@ EOS = '<eos>'
 UNK = '<unk>'
 
 if torch.cuda.device_count() >= 1:
-    DEVICE: torch.device = torch.device('cuda')
+    DEVICE = torch.device('cuda')
 else:
-    DEVICE: torch.device = torch.device('cpu')
+    DEVICE = torch.device('cpu')
 
 
 def evaluate_perplexity(model, data_iter, logits=False):
@@ -28,7 +28,7 @@ def evaluate_perplexity(model, data_iter, logits=False):
             seq_length, batch_size, vocab_size = probabilities.size()
 
             flattened_probabilities = probabilities.view(seq_length * batch_size, -1)
-            flattened_targets = batch.target.view(seq_length * batch_size)
+            flattened_targets = batch.text.view(seq_length * batch_size)
 
             prob_list = list()
             for i in range(seq_length * batch_size):
@@ -57,7 +57,7 @@ def train_model(model, train_iter, val_iter, optimizer, loss_fn):
             for batch in train_it:
                 optimizer.zero_grad()
                 logits = model(batch)
-                labels = batch.target
+                labels = batch.text
 
                 timestep, batch_size, vocab_size = logits.size()
 
@@ -71,9 +71,10 @@ def train_model(model, train_iter, val_iter, optimizer, loss_fn):
                 pbar.update(1)
 
         model.eval()
-        train_ppl = evaluate_perplexity(model, train_iter, True)
-        best = False
-        val_ppl = evaluate_perplexity(model, val_iter, True)
+        with torch.no_grad():
+            train_ppl = evaluate_perplexity(model, train_iter, True)
+            best = False
+            val_ppl = evaluate_perplexity(model, val_iter, True)
         if val_ppl < min_ppl:
             torch.save(model.state_dict(), 'best_model.pt')
             min_ppl = val_ppl

@@ -145,7 +145,7 @@ class CountBasedLinearInterpolation(torch.nn.Module):
 
 
 def train_count_based_model(train_iter, val_iter, test_iter, text, trigram_coefficient, bigram_coefficient):
-    model: CountBasedLinearInterpolation = CountBasedLinearInterpolation(train_iter, text, trigram_coefficient,
+    model = CountBasedLinearInterpolation(train_iter, text, trigram_coefficient,
                                                                          bigram_coefficient)
 
 #    model.reset_prev_tokens(train_iter.batch_size)

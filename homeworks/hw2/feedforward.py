@@ -12,7 +12,7 @@ class FeedforwardLanguageModel(torch.nn.Module):
         self._window_size = window_size
 
         # Glove embeddings
-        self._embeddings = self._text.vocab.vectors
+        self._embeddings = self._text.vocab.vectors.cuda()
 
         self._update_embeddings = nn.Embedding(*self._embeddings.size())
         self._update_embeddings.weight.data.copy_(self._embeddings)
@@ -26,22 +26,22 @@ class FeedforwardLanguageModel(torch.nn.Module):
         self._batch_contexts = None
 
     def reset_contexts(self, batch_size):
-        self._batch_contexts = np.full((batch_size, self._window_size), 0)
+        self._batch_contexts = torch.zeros((batch_size, self._window_size)).cuda()
 
     def forward(self, batch):
         """Computes the unnormalized likelihoods of next-token-prediction for items in a batch."""
         batch_size = batch.text.size(1)
         logits = list()
         for token_index in range(batch.text.size(0)):
-            inputs = torch.tensor(self._batch_contexts)
+            inputs = self._batch_contexts
 
             # Embed words and flatten
-            update_embeddings = self._update_embeddings(inputs)
+            update_embeddings = self._update_embeddings(inputs.cuda().long())
 
             flattened_inputs = inputs.view(-1)
-            embeddings = torch.index_select(self._embeddings, 0, flattened_inputs).view(
+            embeddings = torch.index_select(self._embeddings, 0, flattened_inputs.long()).view(
                 batch_size, self._window_size, -1)
-            embeddings = torch.cat((embeddings, update_embeddings), dim=2).view(batch_size, -1)
+            embeddings = torch.cat((embeddings.cuda(), update_embeddings), dim=2).view(batch_size, -1)
 
             # Put through middle layer and tanh
             embeddings = torch.tanh(self._combination_layer(embeddings))
@@ -56,7 +56,8 @@ class FeedforwardLanguageModel(torch.nn.Module):
 
 
 def train_feedforward_language_model(train_iter, val_iter, test_iter, text, window_size, hidden_size):
-    model: FeedforwardLanguageModel = FeedforwardLanguageModel(text, window_size, hidden_size)
+    model = FeedforwardLanguageModel(text, window_size, hidden_size).cuda()
+    model.train()
 
     model.reset_contexts(train_iter.batch_size)
 
@@ -64,6 +65,8 @@ def train_feedforward_language_model(train_iter, val_iter, test_iter, text, wind
     criterion = nn.CrossEntropyLoss()
 
     util.train_model(model, train_iter, val_iter, optimizer, criterion)
+    model.load_state_dict(torch.load('best_model.pt'))
+    model.eval()
 
     model.reset_contexts(val_iter.batch_size)
     val_perplexity = util.evaluate_perplexity(model, val_iter, True)

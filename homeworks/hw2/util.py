@@ -76,6 +76,6 @@ def train_model(model, train_iter, val_iter, optimizer, loss_fn):
             best = True
         countdown -= 1
         print('Epoch #%d; countdown = %d; val ppl = ' % (epoch_num, countdown) +
-              '{0:.2f}'.format(100. * val_ppl) + ('*' if best else ''))
+              '{0:.2f}'.format(val_ppl) + ('*' if best else ''))
         epoch_num += 1
         model.train()

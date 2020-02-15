@@ -72,13 +72,14 @@ def train_model(model, train_iter, val_iter, optimizer, loss_fn):
 
         model.eval()
         with torch.no_grad():
-            train_ppl = evaluate_perplexity(model, train_iter, True)
+            #train_ppl = evaluate_perplexity(model, train_iter, True)
+            train_ppl = -1
             best = False
             val_ppl = evaluate_perplexity(model, val_iter, True)
         if val_ppl < min_ppl:
             torch.save(model.state_dict(), 'best_model.pt')
             min_ppl = val_ppl
-            patience *= 1.1
+#            patience *= 1.1
             countdown = patience
             best = True
         countdown -= 1

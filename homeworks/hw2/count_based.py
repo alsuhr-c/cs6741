@@ -1,9 +1,11 @@
 import torch
+import random
 import util
+import numpy as np
 
 
 class CountBasedLinearInterpolation(torch.nn.Module):
-    def __init__(self, train_iter, text, trigram_coefficient, bigram_coefficient):
+    def __init__(self, train_iter, text, trigram_coefficient=None, bigram_coefficient=None, val_iter=None):
         super(CountBasedLinearInterpolation, self).__init__()
         unigram_counts = dict()
         bigram_counts = dict()
@@ -11,9 +13,10 @@ class CountBasedLinearInterpolation(torch.nn.Module):
         self._text = text
 
         # Ensure the coefficients define a valid simplex
-        assert 0 <= trigram_coefficient <= 1
-        assert 0 <= bigram_coefficient <= 1
-        assert 0 <= trigram_coefficient + bigram_coefficient <= 1
+        if trigram_coefficient is not None and bigram_coefficient is not None:
+            assert 0 <= trigram_coefficient <= 1
+            assert 0 <= bigram_coefficient <= 1
+            assert 0 <= trigram_coefficient + bigram_coefficient <= 1
 
         self._trigram_coefficient = trigram_coefficient
         self._bigram_coefficient = bigram_coefficient
@@ -90,6 +93,60 @@ class CountBasedLinearInterpolation(torch.nn.Module):
             for word_type, count in counts.items():
                 self._trigram_probabilities[context][word_type] = count / num_occurrences
 
+        if trigram_coefficient is None and bigram_coefficient is None:
+            self._em(val_iter)
+
+    def _em(self, val_iter):
+        """Learns the optimal values of the alpha coefficients using expectation maximization."""
+        # [1] Randomly initialize the coefficient values.
+        trigram_coefficient = random.random()
+        bigram_coefficient = random.random()
+
+        while trigram_coefficient + bigram_coefficient > 1:
+            trigram_coefficient = random.random()
+            bigram_coefficient = random.random()
+
+        self._trigram_coefficient = trigram_coefficient
+        self._bigram_coefficient = bigram_coefficient
+        print('trigram = %s; bigram = %s; unigram = %s; val ppl = %s' % (
+            trigram_coefficient, bigram_coefficient, (1 - trigram_coefficient - bigram_coefficient),
+            util.evaluate_perplexity(self, val_iter)))
+
+        # [2] Until convergence
+        prev_values = (self._trigram_coefficient, self._bigram_coefficient)
+        converged = False
+        while not converged:
+            for batch in val_iter:
+                self._trigram_coefficient = 1.
+                self._bigram_coefficient = 0.
+                weighted_trigram_probabilities = trigram_coefficient * self(batch).reshape(-1)
+
+                self._trigram_coefficient = 0.
+                self._bigram_coefficient = 1.
+                weighted_bigram_probabilities = bigram_coefficient * self(batch).reshape(-1)
+
+                self._trigram_coefficient = 0.
+                self._bigram_coefficient = 0.
+                weighted_unigram_probabilities = (1 - trigram_coefficient - bigram_coefficient) * self(batch).reshape(-1)
+
+                all_probs = torch.stack((weighted_trigram_probabilities, weighted_bigram_probabilities,
+                                         weighted_unigram_probabilities)).permute(1, 0)
+                weighted_prob_sums = torch.sum(all_probs, dim=0)
+                new_distribution = torch.softmax(weighted_prob_sums, dim=0)
+                trigram_coefficient = new_distribution[0].item()
+                bigram_coefficient = new_distribution[1].item()
+
+                self._trigram_coefficient = trigram_coefficient
+                self._bigram_coefficient = bigram_coefficient
+
+            if (self._trigram_coefficient, self._bigram_coefficient) == prev_values:
+                converged = True
+            prev_values = (self._trigram_coefficient, self._bigram_coefficient)
+
+            print('trigram = %s; bigram = %s; unigram = %s; val ppl = %s' % (
+                trigram_coefficient, bigram_coefficient, (1 - trigram_coefficient - bigram_coefficient),
+                util.evaluate_perplexity(self, val_iter)))
+
     def reset_contexts(self, batch_size):
         self._batch_prev_prev_tokens = ['<bos>' for _ in range(batch_size)]
         self._batch_prev_tokens = ['<bos>' for _ in range(batch_size)]
@@ -144,9 +201,8 @@ class CountBasedLinearInterpolation(torch.nn.Module):
         return probabilities
 
 
-def train_count_based_model(train_iter, val_iter, test_iter, text, trigram_coefficient, bigram_coefficient):
-    model = CountBasedLinearInterpolation(train_iter, text, trigram_coefficient,
-                                                                         bigram_coefficient)
+def train_count_based_model(train_iter, val_iter, test_iter, text, trigram_coefficient=None, bigram_coefficient=None):
+    model = CountBasedLinearInterpolation(train_iter, text, trigram_coefficient, bigram_coefficient, val_iter)
 
 #    model.reset_prev_tokens(train_iter.batch_size)
 #    train_perplexity = util.evaluate_perplexity(model, train_iter)

@@ -34,7 +34,10 @@ train_iter, val_iter, test_iter = BPTTIterator.splits((train, val, test), batch_
                                                       bptt_len=32, repeat=False)
 
 if '--count_based_model' in sys.argv:
-    train_count_based_model(train_iter, val_iter, test_iter, TEXT, 0.3, 0.7)
+    if '--em' in sys.argv:
+        train_count_based_model(train_iter, val_iter, test_iter, TEXT)
+    else:
+        train_count_based_model(train_iter, val_iter, test_iter, TEXT, 0.3, 0.7)
 elif '--feedforward_model' in sys.argv:
     train_feedforward_language_model(train_iter, val_iter, test_iter, TEXT, 8, 512)
 elif '--lstm_model' in sys.argv:
